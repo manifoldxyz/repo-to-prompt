@@ -1,4 +1,4 @@
-# Manifold Repo Prompt
+# Manifold Repo to Prompt
 
 A utility for generating file maps and contents for directories. This tool helps in creating structured representations of directory contents, which can be useful to feed into an AI system
 
