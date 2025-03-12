@@ -1,0 +1,33 @@
+{
+  "name": "manifold-repo-prompt",
+  "version": "1.0.0",
+  "description": "A utility for generating file maps and contents for directories",
+  "type": "module",
+  "main": "dist/fileMapper.js",
+  "types": "dist/fileMapper.d.ts",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cli": "vitest run tests/main.test.ts",
+  },
+  "keywords": [
+    "files",
+    "directory",
+    "map",
+    "tree"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "@types/yargs": "^17.0.33",
+    "tsx": "^4.19.3",
+    "yargs": "^17.7.2"
+  }
+}
