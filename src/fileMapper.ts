@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 /**
  * Options for generating a file map
@@ -19,6 +19,8 @@ export interface FileMapResult {
   fileMap: string;
   /** Contents of all files in the directory */
   fileContents: string;
+  /** Token counts for individual files */
+  fileTokens: Record<string, number>;
   /** Approximate token count of the output */
   tokenCount: {
     /** Total token count */
@@ -38,37 +40,40 @@ export interface FileMapResult {
  */
 function estimateTokenCount(text: string): number {
   if (!text) return 0;
-  
+
   // Split by whitespace and punctuation
   // This is a simple approximation - actual tokenization is more complex
-  const tokens = text.split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
-    .filter(token => token && token.trim() !== '');
-  
+  const tokens = text
+    .split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
+    .filter((token) => token && token.trim() !== "");
+
   // Count code blocks and technical content differently
   // Code typically has more tokens per word due to symbols, variable names, etc.
   let inCodeBlock = false;
-  let codeBlockContent = '';
-  let normalContent = '';
-  
-  const lines = text.split('\n');
+  let codeBlockContent = "";
+  let normalContent = "";
+
+  const lines = text.split("\n");
   for (const line of lines) {
-    if (line.trim().startsWith('```')) {
+    if (line.trim().startsWith("```")) {
       inCodeBlock = !inCodeBlock;
     } else if (inCodeBlock) {
-      codeBlockContent += line + '\n';
+      codeBlockContent += line + "\n";
     } else {
-      normalContent += line + '\n';
+      normalContent += line + "\n";
     }
   }
-  
+
   // Adjust for the fact that code tends to have more tokens
   // than regular text due to specialized symbols and identifiers
-  const normalTokenEstimate = normalContent.split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
-    .filter(token => token && token.trim() !== '').length;
-    
-  const codeTokenEstimate = codeBlockContent.split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
-    .filter(token => token && token.trim() !== '').length;
-  
+  const normalTokenEstimate = normalContent
+    .split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
+    .filter((token) => token && token.trim() !== "").length;
+
+  const codeTokenEstimate = codeBlockContent
+    .split(/\s+|([.,!?;:'"(){}\[\]<>\/\\=+-])/g)
+    .filter((token) => token && token.trim() !== "").length;
+
   // Add a small multiplier for code tokens as they tend to be more granular
   return normalTokenEstimate + Math.ceil(codeTokenEstimate * 1.2);
 }
@@ -81,18 +86,16 @@ function estimateTokenCount(text: string): number {
  */
 function shouldIgnore(itemPath: string, ignorePatterns: string[]): boolean {
   const itemName = path.basename(itemPath);
-  return ignorePatterns.some(pattern => {
+  return ignorePatterns.some((pattern) => {
     // Handle exact matches
     if (pattern === itemName) return true;
-    
+
     // Handle glob patterns
-    if (pattern.includes('*')) {
-      const regexPattern = pattern
-        .replace(/\./g, '\\.')
-        .replace(/\*/g, '.*');
+    if (pattern.includes("*")) {
+      const regexPattern = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*");
       return new RegExp(`^${regexPattern}$`).test(itemName);
     }
-    
+
     return false;
   });
 }
@@ -103,69 +106,75 @@ function shouldIgnore(itemPath: string, ignorePatterns: string[]): boolean {
  * @param {FileMapOptions} options - Options for file mapping
  * @returns {FileMapResult} Object containing file map and contents
  */
-export function generateFileMap(dirPath: string, options: FileMapOptions = {}): FileMapResult {
+export function generateFileMap(
+  dirPath: string,
+  options: FileMapOptions = {}
+): FileMapResult {
   const { outputPath, ignorePatterns = [] } = options;
-  
+
   // Check if directory exists
   if (!fs.existsSync(dirPath)) {
     throw new Error(`Directory not found: ${dirPath}`);
   }
-  
-  let fileMap = '';
-  let fileContents = '';
-  
-  function processDirectory(currentPath: string, indent: string = '') {
+
+  let fileMap = "";
+  let fileContents = "";
+  const fileTokens: Record<string, number> = {};
+
+  function processDirectory(currentPath: string, indent: string = "") {
     const items = fs.readdirSync(currentPath);
-    
+
     items.forEach((item, index) => {
       const fullPath = path.join(currentPath, item);
-      
+
       // Skip if item matches ignore patterns
       if (shouldIgnore(fullPath, ignorePatterns)) {
         return;
       }
-      
+
       const isLast = index === items.length - 1;
-      const prefix = isLast ? '└── ' : '├── ';
+      const prefix = isLast ? "└── " : "├── ";
       const stats = fs.statSync(fullPath);
-      
-      fileMap += indent + prefix + item + '\n';
-      
+
+      fileMap += indent + prefix + item + "\n";
+
       if (stats.isDirectory()) {
-        processDirectory(fullPath, indent + (isLast ? '    ' : '│   '));
+        processDirectory(fullPath, indent + (isLast ? "    " : "│   "));
       } else {
-        const content = fs.readFileSync(fullPath, 'utf8');
-        fileContents += `File: ${path.relative(dirPath, fullPath)}\n\`\`\`\n${content}\n\`\`\`\n\n`;
+        const content = fs.readFileSync(fullPath, "utf8");
+        const relativePath = path.relative(dirPath, fullPath);
+        fileContents += `File: ${relativePath}\n\`\`\`\n${content}\n\`\`\`\n\n`;
+        fileTokens[relativePath] = estimateTokenCount(content);
       }
     });
   }
-  
+
   const dirName = path.basename(dirPath);
-  fileMap = dirName + '\n';
+  fileMap = dirName + "\n";
   processDirectory(dirPath);
-  
+
   // Calculate token counts
   const fileMapTokens = estimateTokenCount(fileMap);
   const fileContentsTokens = estimateTokenCount(fileContents);
   const totalTokens = fileMapTokens + fileContentsTokens;
-  
+
   // Write to markdown file if outputPath is provided
   if (outputPath) {
-    const tokenInfo = `\n\n# Token Count\n\n- Total tokens: ${totalTokens}\n- File structure tokens: ${fileMapTokens}\n- File contents tokens: ${fileContentsTokens}\n`;
-    const mdContent = `# Directory Structure for ${dirName}\n\n\`\`\`\n${fileMap}\`\`\`\n\n# File Contents\n\n${fileContents}${tokenInfo}`;
+    const mdContent = `# Directory Structure for ${dirName}\n\n\`\`\`\n${fileMap}\`\`\`\n\n# File Contents\n\n${fileContents}`;
     fs.writeFileSync(outputPath, mdContent);
   }
-  
+
   return {
     fileMap,
     fileContents,
+    fileTokens,
     tokenCount: {
       total: totalTokens,
       fileMapTokens,
-      fileContentsTokens
-    }
+      fileContentsTokens,
+    },
   };
 }
 
 // Remove console.log and export directly
-export default generateFileMap; 
+export default generateFileMap;
