@@ -29,6 +29,11 @@ const DEFAULT_IGNORE_PATTERNS = [
   ".gitignore",
   ".prettierrc.js",
   "babel.config.js",
+  "poetry.lock",
+  "__pycache__",
+  ".flake8",
+  ".ruff_cache",
+  ".mypy_cache",
 ];
 
 const argv = yargs(hideBin(process.argv))
